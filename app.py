@@ -1,0 +1,278 @@
+import streamlit as st
+from pathlib import Path
+import tempfile
+import os
+
+from src.config import Config
+from src.rag_classes import PDFProcessor, VectorStore, RAGGraph
+from src.ollama_client import OllamaClient
+from src.utils import setup_logger
+
+
+logger = setup_logger(__name__)
+
+
+# Page configuration
+st.set_page_config(
+    page_title="Chat PDF Académico",
+    page_icon="📚",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+
+def initialize_session_state():
+    """
+    Initialize Streamlit session state variables.
+    """
+    if 'vector_store' not in st.session_state:
+        st.session_state.vector_store = None
+    
+    if 'rag_graph' not in st.session_state:
+        st.session_state.rag_graph = None
+    
+    if 'chat_history' not in st.session_state:
+        st.session_state.chat_history = []
+    
+    if 'documents_loaded' not in st.session_state:
+        st.session_state.documents_loaded = False
+    
+    if 'current_pdf' not in st.session_state:
+        st.session_state.current_pdf = None
+
+
+def load_components():
+    """
+    Load and initialize core components.
+    
+    Returns:
+        Tuple of (vector_store, ollama_client, rag_graph)
+    """
+    try:
+        # Initialize vector store
+        vector_store = VectorStore()
+        
+        # Initialize Ollama client
+        ollama_client = OllamaClient()
+        
+        # Check Ollama connection
+        if not ollama_client.check_connection():
+            st.error("Cannot connect to Ollama. Please ensure Ollama is running.")
+            st.info(f"Expected Ollama URL: {Config.OLLAMA_BASE_URL}")
+            st.stop()
+        
+        # Initialize RAG graph
+        rag_graph = RAGGraph(vector_store, ollama_client)
+        
+        return vector_store, ollama_client, rag_graph
+        
+    except Exception as e:
+        st.error(f"Error initializing components: {str(e)}")
+        logger.error(f"Component initialization error: {str(e)}")
+        st.stop()
+
+
+def process_uploaded_pdf(uploaded_file, vector_store):
+    """
+    Process uploaded PDF and add to vector store.
+    
+    Args:
+        uploaded_file: Streamlit UploadedFile object
+        vector_store: VectorStore instance
+    """
+    try:
+        with st.spinner("Processing PDF..."):
+            # Save uploaded file temporarily
+            with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as tmp_file:
+                tmp_file.write(uploaded_file.getvalue())
+                tmp_path = Path(tmp_file.name)
+            
+            # Process PDF
+            processor = PDFProcessor()
+            chunks = processor.process_pdf(tmp_path)
+            
+            # Clear existing collection and add new chunks
+            vector_store.clear_collection()
+            vector_store.add_documents(chunks)
+            
+            # Clean up temp file
+            os.unlink(tmp_path)
+            
+            st.success(f"Successfully processed {uploaded_file.name}")
+            st.info(f"Total chunks: {len(chunks)}")
+            
+            return True
+            
+    except Exception as e:
+        st.error(f"Error processing PDF: {str(e)}")
+        logger.error(f"PDF processing error: {str(e)}")
+        return False
+
+
+def display_chat_interface(rag_graph):
+    """
+    Display the chat interface for querying documents.
+    
+    Args:
+        rag_graph: RAGGraph instance
+    """
+    st.subheader("Chat with your document")
+    
+    # Display chat history
+    for message in st.session_state.chat_history:
+        with st.chat_message(message["role"]):
+            st.markdown(message["content"])
+            
+            # Display sources if available
+            if message["role"] == "assistant" and "sources" in message:
+                with st.expander("View Sources"):
+                    for i, source in enumerate(message["sources"], 1):
+                        st.markdown(f"**Source {i}** (Page {source['page']}):")
+                        st.text(source['text'][:300] + "...")
+                        st.markdown("---")
+    
+    # Chat input
+    if prompt := st.chat_input("Ask a question about your document"):
+        # Add user message to chat
+        st.session_state.chat_history.append({
+            "role": "user",
+            "content": prompt
+        })
+        
+        with st.chat_message("user"):
+            st.markdown(prompt)
+        
+        # Generate response
+        with st.chat_message("assistant"):
+            message_placeholder = st.empty()
+            full_response = ""
+            sources = []
+            
+            try:
+                # Stream response
+                for chunk_type, content in rag_graph.stream_query(prompt):
+                    if chunk_type == "answer":
+                        full_response += content
+                        message_placeholder.markdown(full_response + "▌")
+                    elif chunk_type == "sources":
+                        sources = content
+                    elif chunk_type == "status":
+                        message_placeholder.info(content)
+                    elif chunk_type == "error":
+                        message_placeholder.error(f"Error: {content}")
+                
+                # Final update
+                message_placeholder.markdown(full_response)
+                
+                # Add assistant message to chat
+                st.session_state.chat_history.append({
+                    "role": "assistant",
+                    "content": full_response,
+                    "sources": sources
+                })
+                
+                # Display sources
+                if sources:
+                    with st.expander("View Sources"):
+                        for i, source in enumerate(sources, 1):
+                            st.markdown(f"**Source {i}** (Page {source['page']}):")
+                            st.text(source['text'][:300] + "...")
+                            st.markdown("---")
+                
+            except Exception as e:
+                message_placeholder.error(f"Error generating response: {str(e)}")
+                logger.error(f"Query error: {str(e)}")
+
+
+def main():
+    """
+    Main application entry point.
+    """
+    initialize_session_state()
+    
+    # Header
+    st.title("📚 Academic PDF Chat")
+    st.markdown("Upload a PDF document and ask questions about its content using AI.")
+    
+    # Sidebar
+    with st.sidebar:
+        st.header("Configuration")
+        
+        # Model information
+        st.subheader("Model Settings")
+        st.info(f"**Ollama Model:** {Config.OLLAMA_MODEL}")
+        st.info(f"**Embedding Model:** {Config.EMBEDDING_MODEL}")
+        
+        # Load components
+        if st.session_state.vector_store is None:
+            vector_store, ollama_client, rag_graph = load_components()
+            st.session_state.vector_store = vector_store
+            st.session_state.ollama_client = ollama_client
+            st.session_state.rag_graph = rag_graph
+        
+        # Document upload
+        st.subheader("Upload Document")
+        uploaded_file = st.file_uploader(
+            "Choose a PDF file",
+            type=['pdf'],
+            help=f"Maximum file size: {Config.MAX_UPLOAD_SIZE_MB}MB"
+        )
+        
+        if uploaded_file is not None:
+            if st.button("Process PDF"):
+                success = process_uploaded_pdf(
+                    uploaded_file,
+                    st.session_state.vector_store
+                )
+                if success:
+                    st.session_state.documents_loaded = True
+                    st.session_state.current_pdf = uploaded_file.name
+                    st.rerun()
+        
+        # Current document status
+        if st.session_state.documents_loaded:
+            st.success(f"Document loaded: {st.session_state.current_pdf}")
+            
+            # Collection stats
+            stats = st.session_state.vector_store.get_collection_stats()
+            st.metric("Total Chunks", stats['total_documents'])
+        
+        # Clear conversation
+        if st.button("Clear Conversation"):
+            st.session_state.chat_history = []
+            st.rerun()
+        
+        # Clear database
+        if st.button("Clear Database"):
+            if st.session_state.vector_store:
+                st.session_state.vector_store.clear_collection()
+                st.session_state.documents_loaded = False
+                st.session_state.current_pdf = None
+                st.session_state.chat_history = []
+                st.success("Database cleared")
+                st.rerun()
+    
+    # Main content
+    if st.session_state.documents_loaded:
+        display_chat_interface(st.session_state.rag_graph)
+    else:
+        st.info("Please upload a PDF document to begin.")
+        
+        # Instructions
+        st.markdown("""
+        ### How to use:
+        1. Upload a PDF document using the sidebar
+        2. Click "Process PDF" to analyze the document
+        3. Ask questions about the document content
+        4. The AI will provide answers based on the document
+        
+        ### Features:
+        - Retrieval-Augmented Generation (RAG) for accurate responses
+        - Source citations with page numbers
+        - Streaming responses for better user experience
+        - Local processing with Ollama
+        """)
+
+
+if __name__ == "__main__":
+    main()
