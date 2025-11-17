@@ -1,8 +1,3 @@
-"""
-Script to setup and run ngrok tunnel for Ollama.
-Run this script on your local machine before deploying to Streamlit Cloud.
-"""
-
 import subprocess
 import time
 import requests
