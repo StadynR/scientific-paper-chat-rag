@@ -18,10 +18,10 @@ class Config:
     
     # Ollama Configuration
     OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-    OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama2")
+    OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "deepseek-r1")
     
     # Embedding Model Configuration (Ollama model)
-    EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "nomic-embed-text")
+    EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "mxbai-embed-large")
     
     # Chunk Configuration
     CHUNK_SIZE = int(os.getenv("CHUNK_SIZE", "800"))
