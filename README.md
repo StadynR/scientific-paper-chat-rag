@@ -63,46 +63,40 @@ streamlit run app.py
 
 4. Upload a PDF and start chatting!
 
-## Cloud Deployment with Ngrok
+## Remote Access with Ngrok
 
-For accessing the application remotely or sharing with others, you can use ngrok to create a secure tunnel:
+For sharing the application online, use ngrok to create a secure public tunnel:
 
-### Prerequisites for Cloud Deployment
+### Prerequisites for Remote Access
 
 - Ngrok account (free tier works fine)
 - Ngrok authtoken configured
 - Ollama running locally with required models
 
-### Setup Steps
+### Quick Start - One Command Setup
 
-1. **Install ngrok** (if not already installed):
-```bash
-# Windows (using Chocolatey)
-choco install ngrok
+1. **Install ngrok**
 
-# Or download from https://ngrok.com/download
-```
+https://ngrok.com/download
 
-2. **Configure ngrok authtoken**:
+1. **Configure ngrok authtoken** (one time only):
 ```bash
 ngrok config add-authtoken YOUR_AUTHTOKEN_HERE
 ```
 
-3. **Start Ollama server**:
+1. **Run everything with one command**:
 ```bash
-ollama serve
+python run_with_ngrok.py
 ```
 
-4. **Run the setup script** (handles both Streamlit and ngrok):
-```bash
-python setup_tunnel.py
-```
-
-The script will:
+The script will automatically:
 - Verify Ollama is running
-- Start ngrok tunnel for Ollama (port 11434)
-- Launch Streamlit app with cloud configuration
-- Display public URLs for access
+- Start Streamlit app locally
+- Create ngrok tunnel for public access
+- Display the public URL to share
+- Keep everything running until you stop it
+
+**Note**: Your computer needs to be on while the script is running
 
 ### Manual Setup (Alternative)
 
@@ -128,19 +122,19 @@ streamlit run app.py
 
 ### Important Notes for Cloud Deployment
 
-⚠️ **Security Considerations**:
+**Security Considerations**:
 - Ngrok free tier URLs are public - anyone with the URL can access
 - Consider using ngrok's authentication features for sensitive documents
 - Don't share URLs publicly if processing confidential PDFs
 - Free ngrok tunnels expire after inactivity
 
-⚠️ **Performance**:
+**Performance**:
 - Remote access adds latency to Ollama responses
 - LLM generation will be slower over the internet
 - Embedding generation is less affected by network latency
 - Best suited for demonstration/testing, not production use
 
-⚠️ **Resource Usage**:
+**Resource Usage**:
 - Ollama still runs on your local machine
 - Your computer must stay on and connected
 - Sufficient RAM required (~8GB minimum for models)
@@ -240,47 +234,6 @@ The application uses fixed, optimized models:
 - **Embeddings**: `mxbai-embed-large` - High-quality semantic embeddings for retrieval
 
 These models have been selected for optimal performance in academic document analysis.
-
-## Usage Tips
-
-1. **Document Quality**: Best results with text-based PDFs (not scanned images)
-
-2. **Question Formulation**: Be specific and reference document terminology
-
-3. **First Time Setup**:
-   - Upload your PDF
-   - Click "Process PDF"
-   - Wait for processing (shows chunk count)
-   - Start asking questions
-
-4. **For Best Results**:
-   - Ask specific questions with context
-   - Check "View Sources" to verify information
-   - Adjust temperature in `.env` if needed:
-     - Lower (0.2-0.3) for technical/factual content
-     - Higher (0.5-0.7) for creative responses
-
-## 🚀 Optimizations Implemented
-
-This application includes several optimizations for maximum precision:
-
-- ✅ **Smaller chunks** (800 chars) for granular retrieval
-- ✅ **Document re-ranking** with relevance scoring
-- ✅ **Low temperature** (0.3) to reduce hallucinations
-- ✅ **Advanced prompting** with explicit instructions
-- ✅ **Source filtering** (similarity threshold: 0.3)
-- ✅ **6 documents retrieved** with best-match selection
-- ✅ **Optimized models** (DeepSeek-R1 for generation, mxbai-embed-large for embeddings)
-
-Parameters can be tuned in `.env` for specific use cases.
-
-## Performance Considerations
-
-- **Embedding Generation**: First PDF upload takes longer (model download)
-- **Vector Search**: Sub-second for typical document sizes
-- **LLM Generation**: Depends on model size and hardware
-  - Small models (7B): 20-50 tokens/sec
-  - Large models (13B+): 10-20 tokens/sec
 
 ## Limitations
 
