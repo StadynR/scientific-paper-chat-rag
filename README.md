@@ -63,11 +63,111 @@ streamlit run app.py
 
 4. Upload a PDF and start chatting!
 
+## Cloud Deployment with Ngrok
+
+For accessing the application remotely or sharing with others, you can use ngrok to create a secure tunnel:
+
+### Prerequisites for Cloud Deployment
+
+- Ngrok account (free tier works fine)
+- Ngrok authtoken configured
+- Ollama running locally with required models
+
+### Setup Steps
+
+1. **Install ngrok** (if not already installed):
+```bash
+# Windows (using Chocolatey)
+choco install ngrok
+
+# Or download from https://ngrok.com/download
+```
+
+2. **Configure ngrok authtoken**:
+```bash
+ngrok config add-authtoken YOUR_AUTHTOKEN_HERE
+```
+
+3. **Start Ollama server**:
+```bash
+ollama serve
+```
+
+4. **Run the setup script** (handles both Streamlit and ngrok):
+```bash
+python setup_tunnel.py
+```
+
+The script will:
+- Verify Ollama is running
+- Start ngrok tunnel for Ollama (port 11434)
+- Launch Streamlit app with cloud configuration
+- Display public URLs for access
+
+### Manual Setup (Alternative)
+
+If you prefer manual control:
+
+1. **Start Ollama tunnel**:
+```bash
+ngrok http 11434
+```
+
+2. **Update Ollama URL** in your `.env` or Streamlit app:
+```bash
+# Use the ngrok URL shown in terminal
+OLLAMA_BASE_URL=https://your-ngrok-url.ngrok.io
+```
+
+3. **Run Streamlit**:
+```bash
+streamlit run app.py
+```
+
+4. **Access remotely**: Use the Streamlit URL (typically `http://localhost:8501`) or create another ngrok tunnel for Streamlit if needed
+
+### Important Notes for Cloud Deployment
+
+⚠️ **Security Considerations**:
+- Ngrok free tier URLs are public - anyone with the URL can access
+- Consider using ngrok's authentication features for sensitive documents
+- Don't share URLs publicly if processing confidential PDFs
+- Free ngrok tunnels expire after inactivity
+
+⚠️ **Performance**:
+- Remote access adds latency to Ollama responses
+- LLM generation will be slower over the internet
+- Embedding generation is less affected by network latency
+- Best suited for demonstration/testing, not production use
+
+⚠️ **Resource Usage**:
+- Ollama still runs on your local machine
+- Your computer must stay on and connected
+- Sufficient RAM required (~8GB minimum for models)
+
+### Troubleshooting Cloud Deployment
+
+**Ollama connection errors**:
+- Verify ngrok tunnel is active: check ngrok dashboard
+- Ensure Ollama is running: `curl http://localhost:11434/api/tags`
+- Check firewall settings aren't blocking connections
+
+**Slow responses**:
+- Expected due to network overhead
+- Consider using smaller models for faster inference
+- Check your internet upload speed (affects response streaming)
+
+**Ngrok tunnel disconnects**:
+- Free tier has session limits
+- Restart with `python setup_tunnel.py`
+- Consider ngrok paid plans for stable connections
+
 ## Project Structure
 
 ```
 Final/
 ├── app.py                  # Main Streamlit application
+├── setup_tunnel.py         # Automated ngrok tunnel setup script
 ├── requirements.txt        # Python dependencies
 ├── .env.example           # Environment variables template
 ├── .gitignore             # Git ignore rules
