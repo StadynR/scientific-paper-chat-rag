@@ -61,7 +61,7 @@ streamlit run app.py
 
 ### Using the Application
 
-
+https://github.com/user-attachments/assets/e8fe6a1a-3778-441f-881d-7e5c19e6c16e
 
 ## How It Works
 
