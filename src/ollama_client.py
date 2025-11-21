@@ -138,7 +138,12 @@ class OllamaClient:
             "model": self.model,
             "prompt": full_prompt,
             "temperature": temperature,
-            "stream": True
+            "stream": True,
+            "options": {
+                "num_predict": -1,  # Generate until natural end
+                "top_p": 0.9,
+                "top_k": 40
+            }
         }
         
         try:
@@ -156,11 +161,12 @@ class OllamaClient:
                 return
             
             chunk_count = 0
-            for line in response.iter_lines():
+            # Use iter_lines with decode_unicode=True for immediate streaming
+            for line in response.iter_lines(decode_unicode=True):
                 if line:
                     try:
                         data = json.loads(line)
-                        if 'response' in data:
+                        if 'response' in data and data['response']:
                             chunk_count += 1
                             yield data['response']
                         if data.get('done', False):
@@ -195,16 +201,26 @@ class OllamaClient:
 CRITICAL INSTRUCTIONS:
 1. Carefully READ all the provided context before answering
 2. Base your answer ONLY on the information in the context
-3. If the user mentions "the article", "the paper" or "the document", assume they refer to the document that created the provided context
-4. If the user asks questions about the title, name or authors of the article, use the document metadata and/or the first page of the document.
-5. If the information is not in the context, clearly state: "I cannot find specific information about this in the document"
-7. If there is contradictory or ambiguous information, mention it
+3. When you use information from the context, ALWAYS cite the page number inline using the format [pg. X] immediately after the information
+4. Multiple sources can be cited together like [pg. 1, 3] or separately [pg. 1] ... [pg. 3]
+5. JUST INCLUDE THE PAGE OF THE CITATION, DON'T INCLUDE THE DOCUMENT NUMBER.
+6. If the user mentions "the article", "the paper" or "the document", assume they refer to the document that created the provided context
+7. If the user asks questions about the title, name or authors of the article, use the document metadata and/or the first page of the document
+8. If the information is not in the context, clearly state: "I cannot find specific information about this in the document"
+9. If there is contradictory or ambiguous information, mention it
+10. Be concise but complete. Start generating your response immediately.
+
+CITATION EXAMPLES:
+- "The Transformer architecture relies entirely on attention mechanisms [pg. 1]."
+- "The model achieved state-of-the-art results [pg. 5] and outperformed previous approaches [pg. 6]."
+- "Both experiments showed similar patterns [pg. 3, 7]."
 
 DOCUMENT CONTEXT:
 {context}
 
 USER QUESTION: {prompt}
-ANSWER (based on the context):"""
+
+ANSWER (based on the context, with inline citations):"""
         else:
             return prompt
     

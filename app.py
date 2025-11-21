@@ -118,6 +118,53 @@ def display_chat_interface(rag_graph):
     """
     st.subheader("Chat with your document")
     
+    # Add CSS for animated loading dots
+    st.markdown("""
+    <style>
+    .loading-text {
+        color: rgba(128, 128, 128, 0.6);
+        font-style: italic;
+        font-size: 14px;
+        animation: fadeInOut 1.5s ease-in-out infinite;
+    }
+    
+    .loading-dots {
+        display: inline-block;
+    }
+    
+    .loading-dots span {
+        animation: blink 1.4s infinite;
+        animation-fill-mode: both;
+    }
+    
+    .loading-dots span:nth-child(2) {
+        animation-delay: 0.2s;
+    }
+    
+    .loading-dots span:nth-child(3) {
+        animation-delay: 0.4s;
+    }
+    
+    @keyframes blink {
+        0%, 80%, 100% {
+            opacity: 0;
+        }
+        40% {
+            opacity: 1;
+        }
+    }
+    
+    @keyframes fadeInOut {
+        0%, 100% {
+            opacity: 0.4;
+        }
+        50% {
+            opacity: 0.8;
+        }
+    }
+    </style>
+    """, unsafe_allow_html=True)
+    
     # Display chat history
     for message in st.session_state.chat_history:
         with st.chat_message(message["role"]):
@@ -147,22 +194,43 @@ def display_chat_interface(rag_graph):
             message_placeholder = st.empty()
             full_response = ""
             sources = []
+            is_generating = False
             
             try:
+                # Show animated loading message
+                message_placeholder.markdown(
+                    '<div class="loading-text">Generating response<span class="loading-dots"><span>.</span><span>.</span><span>.</span></span></div>',
+                    unsafe_allow_html=True
+                )
+                
                 # Stream response
                 for chunk_type, content in rag_graph.stream_query(prompt):
                     if chunk_type == "answer":
+                        if not is_generating:
+                            is_generating = True
+                            # Clear loading message when first token arrives
                         full_response += content
+                        # Show cursor while streaming
                         message_placeholder.markdown(full_response + "▌")
                     elif chunk_type == "sources":
                         sources = content
                     elif chunk_type == "status":
-                        message_placeholder.info(content)
+                        # Only show loading if we haven't started generating yet
+                        if not is_generating:
+                            message_placeholder.markdown(
+                                '<div class="loading-text">Generating response<span class="loading-dots"><span>.</span><span>.</span><span>.</span></span></div>',
+                                unsafe_allow_html=True
+                            )
                     elif chunk_type == "error":
                         message_placeholder.error(f"Error: {content}")
+                        return
                 
-                # Final update
-                message_placeholder.markdown(full_response)
+                # Final update - remove cursor
+                if full_response:
+                    message_placeholder.markdown(full_response)
+                else:
+                    message_placeholder.warning("No response generated.")
+                    return
                 
                 # Add assistant message to chat
                 st.session_state.chat_history.append({

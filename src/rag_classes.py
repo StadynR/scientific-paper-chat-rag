@@ -522,7 +522,7 @@ class RAGGraph:
         
         try:
             # Retrieve documents
-            yield ("status", "Buscando documentos relevantes...")
+            yield ("status", "retrieving")
             
             results = self.vector_store.similarity_search(
                 query=question,
@@ -539,10 +539,11 @@ class RAGGraph:
             
             context = "\n\n".join(context_parts)
             
-            yield ("status", "Generating response...")
+            # Send sources before starting generation
             yield ("sources", results)
+            yield ("status", "generating")
             
-            # Stream generation
+            # Stream generation - tokens come directly from model
             for chunk in self.ollama_client.generate_stream(
                 prompt=question,
                 context=context,
