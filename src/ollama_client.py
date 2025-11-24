@@ -1,4 +1,4 @@
-from typing import Dict, Optional, Generator
+from typing import Dict, Optional, Generator, List
 import requests
 import json
 
@@ -58,6 +58,86 @@ class OllamaClient:
         except Exception as e:
             logger.error(f"Error listing models: {str(e)}")
             return []
+    
+    def get_models_detailed(self) -> Dict[str, list]:
+        """
+        Get available models categorized by type.
+        
+        Returns:
+            Dictionary with 'text_generation', 'embedding', and 'vision' model lists
+        """
+        try:
+            response = requests.get(f"{self.base_url}/api/tags", timeout=5)
+            if response.status_code != 200:
+                return self._get_fallback_models()
+            
+            data = response.json()
+            models = data.get('models', [])
+            
+            categorized = {
+                'text_generation': [],
+                'embedding': [],
+                'vision': [],
+                'memory': []
+            }
+            
+            for model in models:
+                name = model.get('name', '')
+                model_lower = name.lower()
+                
+                # Categorize based on model name patterns
+                if any(embed_indicator in model_lower for embed_indicator in 
+                      ['embed', 'embedding', 'mxbai', 'nomic', 'bge', 'e5']):
+                    categorized['embedding'].append(name)
+                elif any(vision_indicator in model_lower for vision_indicator in 
+                        ['vision', 'llava', 'bakllava', 'moondream']):
+                    categorized['vision'].append(name)
+                elif any(mem_indicator in model_lower for mem_indicator in
+                        ['llama3.2', 'gemma', 'phi', 'qwen2', 'qwen3:4b']):
+                    # Lighter models suitable for memory/clue generation
+                    categorized['memory'].append(name)
+                    categorized['text_generation'].append(name)
+                else:
+                    # Default to text generation
+                    categorized['text_generation'].append(name)
+            
+            # Sort each category
+            for category in categorized:
+                categorized[category].sort()
+            
+            logger.info(f"Found {len(categorized['text_generation'])} text, "
+                       f"{len(categorized['embedding'])} embedding, "
+                       f"{len(categorized['vision'])} vision models")
+            
+            return categorized
+            
+        except Exception as e:
+            logger.error(f"Error getting detailed models: {str(e)}")
+            return self._get_fallback_models()
+    
+    def _get_fallback_models(self) -> Dict[str, list]:
+        """
+        Return fallback model configuration if Ollama is unavailable.
+        
+        Returns:
+            Dictionary with default models from Config
+        """
+        return {
+            'text_generation': [Config.OLLAMA_MODEL],
+            'embedding': [Config.EMBEDDING_MODEL],
+            'vision': [],
+            'memory': [Config.MEMORY_MODEL]
+        }
+    
+    def set_model(self, model_name: str) -> None:
+        """
+        Change the active model for generation.
+        
+        Args:
+            model_name: Name of the model to use
+        """
+        self.model = model_name
+        logger.info(f"Model changed to: {model_name}")
     
     def generate(self, 
                 prompt: str, 

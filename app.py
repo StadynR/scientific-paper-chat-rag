@@ -29,6 +29,9 @@ def initialize_session_state():
     if 'vector_store' not in st.session_state:
         st.session_state.vector_store = None
     
+    if 'ollama_client' not in st.session_state:
+        st.session_state.ollama_client = None
+    
     if 'memory_model' not in st.session_state:
         st.session_state.memory_model = None
     
@@ -46,6 +49,18 @@ def initialize_session_state():
     
     if 'use_memorag' not in st.session_state:
         st.session_state.use_memorag = True
+    
+    if 'selected_generation_model' not in st.session_state:
+        st.session_state.selected_generation_model = Config.OLLAMA_MODEL
+    
+    if 'selected_memory_model' not in st.session_state:
+        st.session_state.selected_memory_model = Config.MEMORY_MODEL
+    
+    if 'selected_embedding_model' not in st.session_state:
+        st.session_state.selected_embedding_model = Config.EMBEDDING_MODEL
+    
+    if 'available_models' not in st.session_state:
+        st.session_state.available_models = None
 
 
 def load_components():
@@ -56,11 +71,15 @@ def load_components():
         Tuple of (vector_store, ollama_client, rag_graph)
     """
     try:
-        # Initialize vector store
-        vector_store = VectorStore()
+        # Initialize vector store with selected embedding model
+        vector_store = VectorStore(
+            embedding_model=st.session_state.selected_embedding_model
+        )
         
-        # Initialize Ollama client
-        ollama_client = OllamaClient()
+        # Initialize Ollama client with selected generation model
+        ollama_client = OllamaClient(
+            model=st.session_state.selected_generation_model
+        )
         
         # Check Ollama connection
         if not ollama_client.check_connection():
@@ -68,8 +87,10 @@ def load_components():
             st.info(f"Expected Ollama URL: {Config.OLLAMA_BASE_URL}")
             st.stop()
         
-        # Initialize Memory Model
-        memory_model = MemoryModel()
+        # Initialize Memory Model with selected memory model
+        memory_model = MemoryModel(
+            model_name=st.session_state.selected_memory_model
+        )
         
         # Initialize RAG graph with MemoRAG support
         rag_graph = RAGGraph(vector_store, ollama_client, memory_model)
@@ -319,14 +340,92 @@ def main():
     with st.sidebar:
         st.header("Configuration")
         
-        # Model information
-        st.subheader("Model Settings")
-        st.info(f"**Ollama Model:** {Config.OLLAMA_MODEL}")
-        st.info(f"**Memory Model:** {Config.MEMORY_MODEL}")
-        st.info(f"**Embedding Model:** {Config.EMBEDDING_MODEL}")
+        # Load components first if not loaded
+        if st.session_state.ollama_client is None:
+            vector_store, ollama_client, memory_model, rag_graph = load_components()
+            st.session_state.vector_store = vector_store
+            st.session_state.ollama_client = ollama_client
+            st.session_state.memory_model = memory_model
+            st.session_state.rag_graph = rag_graph
+        
+        # Model Selection with refresh button
+        col1, col2 = st.columns([5, 1])
+        with col1:
+            st.markdown("### ⚙️ Model Settings")
+        with col2:
+            if st.button("🔄", help="Refresh model list", key="refresh_models", use_container_width=False):
+                st.session_state.available_models = None
+                st.rerun()
+        
+        # Get available models from Ollama
+        if st.session_state.available_models is None:
+            with st.spinner("Loading available models..."):
+                st.session_state.available_models = st.session_state.ollama_client.get_models_detailed()
+        
+        models = st.session_state.available_models
+        
+        # Text Generation Model selector
+        if models['text_generation']:
+            current_gen_idx = 0
+            if st.session_state.selected_generation_model in models['text_generation']:
+                current_gen_idx = models['text_generation'].index(st.session_state.selected_generation_model)
+            
+            selected_gen = st.selectbox(
+                "🤖 Generation Model",
+                options=models['text_generation'],
+                index=current_gen_idx,
+                help="Model used for generating responses"
+            )
+            
+            if selected_gen != st.session_state.selected_generation_model:
+                st.session_state.selected_generation_model = selected_gen
+                if st.session_state.ollama_client:
+                    st.session_state.ollama_client.set_model(selected_gen)
+                if st.session_state.rag_graph:
+                    st.session_state.rag_graph.ollama_client.set_model(selected_gen)
+                st.success(f"✓ Generation model changed to {selected_gen}")
+        
+        # Memory Model selector (for MemoRAG)
+        if models['memory'] or models['text_generation']:
+            memory_options = models['memory'] if models['memory'] else models['text_generation']
+            current_mem_idx = 0
+            if st.session_state.selected_memory_model in memory_options:
+                current_mem_idx = memory_options.index(st.session_state.selected_memory_model)
+            
+            selected_mem = st.selectbox(
+                "🧠 Memory Model",
+                options=memory_options,
+                index=current_mem_idx,
+                help="Lightweight model for MemoRAG clue generation"
+            )
+            
+            if selected_mem != st.session_state.selected_memory_model:
+                st.session_state.selected_memory_model = selected_mem
+                if st.session_state.memory_model and hasattr(st.session_state.memory_model, 'model_name'):
+                    st.session_state.memory_model.model_name = selected_mem
+                st.success(f"✓ Memory model changed to {selected_mem}")
+        
+        # Embedding Model selector
+        if models['embedding']:
+            current_emb_idx = 0
+            if st.session_state.selected_embedding_model in models['embedding']:
+                current_emb_idx = models['embedding'].index(st.session_state.selected_embedding_model)
+            
+            selected_emb = st.selectbox(
+                "📊 Embedding Model",
+                options=models['embedding'],
+                index=current_emb_idx,
+                help="Model used for document embeddings and search"
+            )
+            
+            if selected_emb != st.session_state.selected_embedding_model:
+                st.warning("⚠️ Changing embedding model requires reprocessing documents")
+                st.session_state.selected_embedding_model = selected_emb
+        
+        st.divider()
         
         # MemoRAG toggle
-        st.subheader("Retrieval Mode")
+        st.subheader("🔍 Retrieval Mode")
         use_memorag = st.toggle(
             "Enable MemoRAG",
             value=st.session_state.use_memorag,
@@ -343,13 +442,7 @@ def main():
         else:
             st.info("📋 Standard Retrieval")
         
-        # Load components
-        if st.session_state.vector_store is None:
-            vector_store, ollama_client, memory_model, rag_graph = load_components()
-            st.session_state.vector_store = vector_store
-            st.session_state.ollama_client = ollama_client
-            st.session_state.memory_model = memory_model
-            st.session_state.rag_graph = rag_graph
+        st.divider()
         
         # Document upload
         st.subheader("Upload Document")
