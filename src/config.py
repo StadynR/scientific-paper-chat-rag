@@ -20,6 +20,11 @@ class Config:
     OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
     OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "deepseek-r1")
     
+    # Memory Model Configuration (MemoRAG)
+    MEMORY_MODEL = os.getenv("MEMORY_MODEL", "llama3.2")
+    MEMORY_TEMPERATURE = float(os.getenv("MEMORY_TEMPERATURE", "0.5"))
+    NUM_CLUES = int(os.getenv("NUM_CLUES", "3"))  # Number of clues to generate per query
+    
     # Embedding Model Configuration (Ollama model)
     EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "mxbai-embed-large")
     
@@ -35,6 +40,9 @@ class Config:
     
     # Vector Store Configuration
     VECTOR_STORE_PATH = Path(os.getenv("VECTOR_STORE_PATH", "./data/vectorstore"))
+    
+    # Memory Store Configuration (MemoRAG)
+    MEMORY_STORE_PATH = Path(os.getenv("MEMORY_STORE_PATH", "./data/memory"))
     
     # Application Configuration
     MAX_UPLOAD_SIZE_MB = int(os.getenv("MAX_UPLOAD_SIZE_MB", "50"))
@@ -52,6 +60,7 @@ class Config:
         cls.DATA_DIR.mkdir(exist_ok=True)
         cls.PDFS_DIR.mkdir(exist_ok=True)
         cls.VECTOR_STORE_PATH.mkdir(exist_ok=True, parents=True)
+        cls.MEMORY_STORE_PATH.mkdir(exist_ok=True, parents=True)
 
 
 # Ensure directories exist on module import

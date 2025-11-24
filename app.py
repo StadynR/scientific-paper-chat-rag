@@ -6,6 +6,7 @@ import os
 from src.config import Config
 from src.rag_classes import PDFProcessor, VectorStore, RAGGraph
 from src.ollama_client import OllamaClient
+from src.memory_model import MemoryModel
 from src.utils import setup_logger
 
 
@@ -28,6 +29,9 @@ def initialize_session_state():
     if 'vector_store' not in st.session_state:
         st.session_state.vector_store = None
     
+    if 'memory_model' not in st.session_state:
+        st.session_state.memory_model = None
+    
     if 'rag_graph' not in st.session_state:
         st.session_state.rag_graph = None
     
@@ -39,6 +43,9 @@ def initialize_session_state():
     
     if 'current_pdf' not in st.session_state:
         st.session_state.current_pdf = None
+    
+    if 'use_memorag' not in st.session_state:
+        st.session_state.use_memorag = True
 
 
 def load_components():
@@ -61,10 +68,13 @@ def load_components():
             st.info(f"Expected Ollama URL: {Config.OLLAMA_BASE_URL}")
             st.stop()
         
-        # Initialize RAG graph
-        rag_graph = RAGGraph(vector_store, ollama_client)
+        # Initialize Memory Model
+        memory_model = MemoryModel()
         
-        return vector_store, ollama_client, rag_graph
+        # Initialize RAG graph with MemoRAG support
+        rag_graph = RAGGraph(vector_store, ollama_client, memory_model)
+        
+        return vector_store, ollama_client, memory_model, rag_graph
         
     except Exception as e:
         st.error(f"Error initializing components: {str(e)}")
@@ -72,13 +82,14 @@ def load_components():
         st.stop()
 
 
-def process_uploaded_pdf(uploaded_file, vector_store):
+def process_uploaded_pdf(uploaded_file, vector_store, memory_model):
     """
     Process uploaded PDF and add to vector store.
     
     Args:
         uploaded_file: Streamlit UploadedFile object
         vector_store: VectorStore instance
+        memory_model: MemoryModel instance
     """
     try:
         with st.spinner("Processing PDF..."):
@@ -100,6 +111,22 @@ def process_uploaded_pdf(uploaded_file, vector_store):
             
             st.success(f"Successfully processed {uploaded_file.name}")
             st.info(f"Total chunks: {len(chunks)}")
+            
+            # Build global memory with MemoRAG (if enabled)
+            if st.session_state.use_memorag:
+                with st.spinner("Building global memory (MemoRAG)..."):
+                    memory = memory_model.memorize_document(chunks)
+                    st.success("✓ Global memory created")
+                    
+                    # Show memory stats
+                    if memory.get('key_topics'):
+                        with st.expander("📝 Memory Summary"):
+                            st.write("**Key Topics:**")
+                            for topic in memory['key_topics'][:5]:
+                                st.write(f"- {topic}")
+                            st.write(f"\n**Pages processed:** {memory['metadata']['total_pages']}")
+            else:
+                st.info("ℹ️ MemoRAG disabled - memory not built")
             
             return True
             
@@ -203,9 +230,23 @@ def display_chat_interface(rag_graph):
                     unsafe_allow_html=True
                 )
                 
+                # Container for clues
+                clues_display = None
+                clues_container = st.container()
+                
                 # Stream response
-                for chunk_type, content in rag_graph.stream_query(prompt):
-                    if chunk_type == "answer":
+                for chunk_type, content in rag_graph.stream_query(prompt, use_memorag=st.session_state.use_memorag):
+                    if chunk_type == "clues" and st.session_state.use_memorag:
+                        # Display generated clues only if MemoRAG is enabled
+                        with clues_container:
+                            with st.expander("🧠 MemoRAG Search Clues", expanded=False):
+                                st.markdown("**Generated search strategies:**")
+                                for i, clue in enumerate(content, 1):
+                                    if i == 1:
+                                        st.markdown(f"- 🎯 {clue} _(original)_")
+                                    else:
+                                        st.markdown(f"- 🔍 {clue}")
+                    elif chunk_type == "answer":
                         if not is_generating:
                             is_generating = True
                             # Clear loading message when first token arrives
@@ -217,10 +258,22 @@ def display_chat_interface(rag_graph):
                     elif chunk_type == "status":
                         # Only show loading if we haven't started generating yet
                         if not is_generating:
-                            message_placeholder.markdown(
-                                '<div class="loading-text">Generating response<span class="loading-dots"><span>.</span><span>.</span><span>.</span></span></div>',
-                                unsafe_allow_html=True
-                            )
+                            if content == "generating_clues" and st.session_state.use_memorag:
+                                message_placeholder.markdown(
+                                    '<div class="loading-text">🧠 Analyzing document memory<span class="loading-dots"><span>.</span><span>.</span><span>.</span></span></div>',
+                                    unsafe_allow_html=True
+                                )
+                            elif content == "retrieving":
+                                retrieval_mode = "MemoRAG" if st.session_state.use_memorag else "Standard"
+                                message_placeholder.markdown(
+                                    f'<div class="loading-text">🔍 Retrieving ({retrieval_mode})<span class="loading-dots"><span>.</span><span>.</span><span>.</span></span></div>',
+                                    unsafe_allow_html=True
+                                )
+                            else:
+                                message_placeholder.markdown(
+                                    '<div class="loading-text">Generating response<span class="loading-dots"><span>.</span><span>.</span><span>.</span></span></div>',
+                                    unsafe_allow_html=True
+                                )
                     elif chunk_type == "error":
                         message_placeholder.error(f"Error: {content}")
                         return
@@ -269,13 +322,33 @@ def main():
         # Model information
         st.subheader("Model Settings")
         st.info(f"**Ollama Model:** {Config.OLLAMA_MODEL}")
+        st.info(f"**Memory Model:** {Config.MEMORY_MODEL}")
         st.info(f"**Embedding Model:** {Config.EMBEDDING_MODEL}")
+        
+        # MemoRAG toggle
+        st.subheader("Retrieval Mode")
+        use_memorag = st.toggle(
+            "Enable MemoRAG",
+            value=st.session_state.use_memorag,
+            help="Use MemoRAG for intelligent clue-based retrieval. When disabled, uses standard similarity search."
+        )
+        
+        if use_memorag != st.session_state.use_memorag:
+            st.session_state.use_memorag = use_memorag
+            st.rerun()
+        
+        # Show status
+        if st.session_state.use_memorag:
+            st.success("🧠 MemoRAG Active")
+        else:
+            st.info("📋 Standard Retrieval")
         
         # Load components
         if st.session_state.vector_store is None:
-            vector_store, ollama_client, rag_graph = load_components()
+            vector_store, ollama_client, memory_model, rag_graph = load_components()
             st.session_state.vector_store = vector_store
             st.session_state.ollama_client = ollama_client
+            st.session_state.memory_model = memory_model
             st.session_state.rag_graph = rag_graph
         
         # Document upload
@@ -290,7 +363,8 @@ def main():
             if st.button("Process PDF"):
                 success = process_uploaded_pdf(
                     uploaded_file,
-                    st.session_state.vector_store
+                    st.session_state.vector_store,
+                    st.session_state.memory_model
                 )
                 if success:
                     st.session_state.documents_loaded = True
@@ -314,10 +388,12 @@ def main():
         if st.button("Clear Database"):
             if st.session_state.vector_store:
                 st.session_state.vector_store.clear_collection()
+                if st.session_state.memory_model:
+                    st.session_state.memory_model.clear_memory()
                 st.session_state.documents_loaded = False
                 st.session_state.current_pdf = None
                 st.session_state.chat_history = []
-                st.success("Database cleared")
+                st.success("Database and memory cleared")
                 st.rerun()
     
     # Main content
@@ -335,7 +411,8 @@ def main():
         4. The AI will provide answers based on the document
         
         ### Features:
-        - Retrieval-Augmented Generation (RAG) for accurate responses
+        - **MemoRAG**: Intelligent clue-based retrieval using document memory
+        - **Standard RAG**: Classic similarity search (toggle to compare)
         - Source citations with page numbers
         - Streaming responses for better user experience
         - Local processing with Ollama

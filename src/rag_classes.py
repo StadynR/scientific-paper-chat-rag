@@ -1,7 +1,10 @@
 import fitz  # PyMuPDF
 from pathlib import Path
-from typing import TypedDict, List, Dict, Optional, Annotated
+from typing import TypedDict, List, Dict, Optional, Annotated, TYPE_CHECKING
 import chromadb
+
+if TYPE_CHECKING:
+    from .memory_model import MemoryModel
 from chromadb.config import Settings
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langgraph.graph import StateGraph, END
@@ -215,6 +218,89 @@ class VectorStore:
         
         logger.info(f"Successfully added {len(chunks)} documents")
     
+    def similarity_search_with_clues(self,
+                                     clues: List[str],
+                                     k: int = 4,
+                                     score_threshold: float = None) -> List[Dict[str, str]]:
+        """
+        Search for similar documents using multiple clues (MemoRAG approach).
+        Combines results from multiple clue-based searches and re-ranks.
+        
+        Args:
+            clues: List of search clues (queries)
+            k: Total number of results to return
+            score_threshold: Optional minimum similarity score
+            
+        Returns:
+            List of unique documents ranked by relevance
+        """
+        logger.info(f"Searching with {len(clues)} clues (k={k})")
+        
+        # Collect results from all clues
+        all_results = {}
+        
+        for idx, clue in enumerate(clues):
+            logger.info(f"Clue {idx+1}: '{clue[:60]}...'")
+            
+            # Generate embedding for this clue
+            clue_embedding = self._generate_embedding(clue)
+            
+            # Search with this clue
+            results = self.collection.query(
+                query_embeddings=[clue_embedding],
+                n_results=k
+            )
+            
+            # Process results
+            if results['documents'] and results['documents'][0]:
+                for i in range(len(results['documents'][0])):
+                    doc_id = results['ids'][0][i]
+                    distance = results['distances'][0][i] if 'distances' in results else 1.0
+                    similarity = 1.0 - (distance / 2.0)
+                    
+                    # Skip low-quality matches
+                    if score_threshold and similarity < score_threshold:
+                        continue
+                    
+                    # If document already found by another clue, boost its score
+                    if doc_id in all_results:
+                        # Average similarity + bonus for multiple clue matches
+                        all_results[doc_id]['clue_count'] += 1
+                        all_results[doc_id]['total_similarity'] += similarity
+                        all_results[doc_id]['avg_similarity'] = (
+                            all_results[doc_id]['total_similarity'] / 
+                            all_results[doc_id]['clue_count']
+                        )
+                    else:
+                        all_results[doc_id] = {
+                            'text': results['documents'][0][i],
+                            'page': results['metadatas'][0][i].get('page', 'unknown'),
+                            'source': results['metadatas'][0][i].get('source', 'unknown'),
+                            'distance': distance,
+                            'similarity': similarity,
+                            'clue_count': 1,
+                            'total_similarity': similarity,
+                            'avg_similarity': similarity
+                        }
+        
+        # Convert to list and calculate final scores
+        documents = []
+        for doc_id, doc_data in all_results.items():
+            # Boost documents matched by multiple clues
+            clue_bonus = (doc_data['clue_count'] - 1) * 0.05  # +5% per additional clue
+            final_score = doc_data['avg_similarity'] + clue_bonus
+            
+            doc_data['relevance_score'] = final_score
+            doc_data['matched_clues'] = doc_data['clue_count']
+            documents.append(doc_data)
+        
+        # Sort by relevance and limit results
+        documents = sorted(documents, key=lambda x: x['relevance_score'], reverse=True)[:k]
+        
+        scores_str = [f"{d['relevance_score']:.3f}(x{d['matched_clues']})" for d in documents]
+        logger.info(f"Found {len(documents)} unique documents (scores: {scores_str})")
+        return documents
+    
     def similarity_search(self, 
                          query: str, 
                          k: int = 4,
@@ -342,10 +428,12 @@ class RAGState(TypedDict):
     Contains all data passed between nodes.
     """
     question: str
+    clues: List[str]
     context: str
     sources: List[Dict[str, str]]
     answer: str
     error: str
+    use_memorag: bool
 
 
 class RAGGraph:
@@ -354,21 +442,23 @@ class RAGGraph:
     Orchestrates retrieval and generation steps.
     """
     
-    def __init__(self, vector_store: VectorStore, ollama_client: OllamaClient):
+    def __init__(self, vector_store: VectorStore, ollama_client: OllamaClient, memory_model: Optional['MemoryModel'] = None):
         """
         Initialize the RAG graph.
         
         Args:
             vector_store: VectorStore instance for retrieval
             ollama_client: OllamaClient instance for generation
+            memory_model: Optional MemoryModel instance for MemoRAG
         """
         self.vector_store = vector_store
         self.ollama_client = ollama_client
+        self.memory_model = memory_model
         
         # Build the graph
         self.graph = self._build_graph()
         
-        logger.info("RAG Graph initialized")
+        logger.info(f"RAG Graph initialized (MemoRAG: {memory_model is not None})")
     
     def _build_graph(self) -> StateGraph:
         """
@@ -381,20 +471,56 @@ class RAGGraph:
         workflow = StateGraph(RAGState)
         
         # Add nodes
+        workflow.add_node("generate_clues", self._generate_clues_node)
         workflow.add_node("retrieve", self._retrieve_node)
         workflow.add_node("generate", self._generate_node)
         
         # Define edges
-        workflow.set_entry_point("retrieve")
+        workflow.set_entry_point("generate_clues")
+        workflow.add_edge("generate_clues", "retrieve")
         workflow.add_edge("retrieve", "generate")
         workflow.add_edge("generate", END)
         
         # Compile
         return workflow.compile()
     
+    def _generate_clues_node(self, state: RAGState) -> RAGState:
+        """
+        Clue generation node: generate search clues using memory model.
+        
+        Args:
+            state: Current RAG state
+            
+        Returns:
+            Updated state with clues
+        """
+        try:
+            # Check if MemoRAG is enabled and available
+            if state.get('use_memorag', True) and self.memory_model:
+                logger.info("Generating clues with MemoRAG")
+                clues = self.memory_model.generate_clues(state['question'])
+            else:
+                logger.info("Using standard retrieval (no MemoRAG)")
+                clues = [state['question']]
+            
+            return {
+                **state,
+                "clues": clues,
+                "error": ""
+            }
+            
+        except Exception as e:
+            logger.error(f"Error generating clues: {str(e)}")
+            # Fallback to standard retrieval
+            return {
+                **state,
+                "clues": [state['question']],
+                "error": ""
+            }
+    
     def _retrieve_node(self, state: RAGState) -> RAGState:
         """
-        Retrieval node: search for relevant documents.
+        Retrieval node: search for relevant documents using clues.
         
         Args:
             state: Current RAG state
@@ -405,18 +531,30 @@ class RAGGraph:
         try:
             logger.info(f"Retrieving documents for: {state['question']}")
             
-            # Search for relevant documents
-            results = self.vector_store.similarity_search(
-                query=state['question'],
-                k=Config.TOP_K_DOCUMENTS,
-                score_threshold=0.3  # Filter low-quality matches
-            )
+            # Get clues (fallback to question if not available)
+            clues = state.get('clues', [state['question']])
+            
+            # Search using clues if multiple, otherwise standard search
+            if len(clues) > 1:
+                logger.info(f"Using MemoRAG retrieval with {len(clues)} clues")
+                results = self.vector_store.similarity_search_with_clues(
+                    clues=clues,
+                    k=Config.TOP_K_DOCUMENTS,
+                    score_threshold=0.3
+                )
+            else:
+                logger.info("Using standard retrieval")
+                results = self.vector_store.similarity_search(
+                    query=clues[0],
+                    k=Config.TOP_K_DOCUMENTS,
+                    score_threshold=0.3
+                )
             
             # Build context from results
             context_parts = []
             for i, doc in enumerate(results, 1):
                 context_parts.append(
-                    f"[Document {i} - Page {doc['page']}]\n{doc['text']}"
+                    f"[Source {i} - Page {doc['page']}]\n{doc['text']}"
                 )
             
             context = "\n\n".join(context_parts)
@@ -478,12 +616,13 @@ class RAGGraph:
                 "error": f"Generation error: {str(e)}"
             }
     
-    def query(self, question: str) -> Dict[str, any]:
+    def query(self, question: str, use_memorag: bool = True) -> Dict[str, any]:
         """
         Execute the RAG pipeline for a question.
         
         Args:
             question: User question
+            use_memorag: Whether to use MemoRAG (default: True)
             
         Returns:
             Dictionary with answer and sources
@@ -493,10 +632,12 @@ class RAGGraph:
         # Initial state
         initial_state = RAGState(
             question=question,
+            clues=[],
             context="",
             sources=[],
             answer="",
-            error=""
+            error="",
+            use_memorag=use_memorag
         )
         
         # Run the graph
@@ -508,12 +649,13 @@ class RAGGraph:
             "error": final_state.get("error", "")
         }
     
-    def stream_query(self, question: str):
+    def stream_query(self, question: str, use_memorag: bool = True):
         """
         Execute RAG pipeline with streaming response.
         
         Args:
             question: User question
+            use_memorag: Whether to use MemoRAG (default: True)
             
         Yields:
             Tuples of (chunk_type, content)
@@ -521,14 +663,33 @@ class RAGGraph:
         logger.info(f"Processing streaming query: {question}")
         
         try:
-            # Retrieve documents
+            # Generate clues with MemoRAG
+            clues = [question]  # Default
+            if use_memorag and self.memory_model:
+                yield ("status", "generating_clues")
+                try:
+                    clues = self.memory_model.generate_clues(question)
+                    logger.info(f"Generated {len(clues)} clues")
+                    yield ("clues", clues)
+                except Exception as e:
+                    logger.error(f"Clue generation failed: {str(e)}")
+                    clues = [question]
+            
+            # Retrieve documents using clues
             yield ("status", "retrieving")
             
-            results = self.vector_store.similarity_search(
-                query=question,
-                k=Config.TOP_K_DOCUMENTS,
-                score_threshold=0.3  # Filter low-quality matches
-            )
+            if len(clues) > 1:
+                results = self.vector_store.similarity_search_with_clues(
+                    clues=clues,
+                    k=Config.TOP_K_DOCUMENTS,
+                    score_threshold=0.3
+                )
+            else:
+                results = self.vector_store.similarity_search(
+                    query=clues[0],
+                    k=Config.TOP_K_DOCUMENTS,
+                    score_threshold=0.3
+                )
             
             # Build context
             context_parts = []
