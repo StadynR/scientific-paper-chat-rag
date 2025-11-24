@@ -159,7 +159,6 @@ All settings have sensible defaults and can be customized in `.env`:
 - 🎯 Optimized for academic/technical documents (may struggle with highly visual content)
 - ⏱️ First-token latency depends on context size and model processing time
 - 🧠 MemoRAG memory building adds initial processing time (runs once per document)
-- 🌐 No built-in ngrok/cloud deployment (local deployment only)
 
 ## Troubleshooting
 
