@@ -22,6 +22,379 @@ st.set_page_config(
 )
 
 
+def apply_custom_theme(theme: str):
+    """
+    Apply custom theme styling.
+    
+    Args:
+        theme: 'dark' or 'light'
+    """
+    if theme == 'dark':
+        st.markdown("""
+        <style>
+            /* Dark theme colors - improved */
+            [data-testid="stAppViewContainer"] {
+                background-color: #0f1318;
+            }
+            
+            [data-testid="stHeader"] {
+                background-color: #0f1318;
+            }
+            
+            [data-testid="stSidebar"] {
+                background-color: #1a1d24;
+            }
+            
+            [data-testid="stSidebarNav"] {
+                background-color: #1a1d24;
+            }
+            
+            /* Main content background */
+            .main .block-container {
+                background-color: #0f1318;
+            }
+            
+            /* Text colors */
+            .stApp {
+                color: #e8eaed;
+            }
+            
+            /* Titles and headers */
+            h1, h2, h3, h4, h5, h6 {
+                color: #b8bcc2 !important;
+            }
+            
+            .stMarkdown h1 {
+                color: #b8bcc2 !important;
+            }
+            
+            /* Chat messages */
+            [data-testid="stChatMessage"] {
+                background-color: #1e2329 !important;
+                border: 1px solid #2d3139;
+            }
+            
+            [data-testid="stChatMessageContent"] {
+                color: #e8eaed;
+            }
+            
+            /* Buttons */
+            .stButton>button {
+                background-color: #2563eb;
+                color: white;
+                border-radius: 8px;
+                border: none;
+                transition: all 0.3s;
+            }
+            
+            .stButton>button:hover {
+                background-color: #1d4ed8;
+                box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);
+            }
+            
+            /* Selectbox and inputs */
+            [data-testid="stSelectbox"] > div > div {
+                background-color: #252a31 !important;
+                color: #e8eaed;
+                border: 1px solid #3d4451 !important;
+            }
+            
+            .stSelectbox label, .stTextInput label {
+                color: #b8bcc2 !important;
+            }
+            
+            /* Selectbox inner elements */
+            .stSelectbox > div > div > div {
+                background-color: #252a31 !important;
+            }
+            
+            .stSelectbox [data-baseweb="select"] {
+                background-color: #252a31 !important;
+            }
+            
+            .stSelectbox [data-baseweb="select"] > div {
+                background-color: #252a31 !important;
+                color: #e8eaed !important;
+            }
+            
+            /* Selectbox arrow (dropdown icon) */
+            .stSelectbox svg {
+                fill: #f0f2f5 !important;
+                color: #f0f2f5 !important;
+            }
+            
+            /* Selectbox on hover */
+            .stSelectbox [data-baseweb="select"]:hover {
+                border-color: #2563eb !important;
+            }
+            
+            /* Dropdown menu */
+            [data-baseweb="popover"] {
+                background-color: #252a31 !important;
+            }
+            
+            [role="listbox"] {
+                background-color: #252a31 !important;
+                border: 1px solid #3d4451 !important;
+            }
+            
+            [role="option"] {
+                background-color: #252a31 !important;
+                color: #e8eaed !important;
+            }
+            
+            [role="option"]:hover {
+                background-color: #2d3340 !important;
+                color: #fff !important;
+            }
+            
+            /* File uploader */
+            [data-testid="stFileUploader"] {
+                background-color: #1e2329;
+                border: 1px solid #2d3139;
+                border-radius: 8px;
+            }
+            
+            /* Expander */
+            [data-testid="stExpander"] {
+                background-color: #1e2329;
+                border: 1px solid #2d3139;
+                border-radius: 8px;
+            }
+            
+            .streamlit-expanderHeader {
+                background-color: #1e2329;
+                color: #e8eaed;
+            }
+            
+            /* Info boxes */
+            .stAlert {
+                background-color: #1e2329;
+                border: 1px solid #2d3139;
+                color: #f0f2f5 !important;
+            }
+            
+            .stAlert > div {
+                color: #f0f2f5 !important;
+            }
+            
+            /* Success box */
+            [data-testid="stSuccess"] {
+                background-color: #1e3a2a;
+                border: 1px solid #2d5a3d;
+            }
+            
+            [data-testid="stSuccess"], [data-testid="stSuccess"] * {
+                color: #d1fae5 !important;
+            }
+            
+            /* Warning box */
+            [data-testid="stWarning"] {
+                background-color: #3a2e1e;
+                border: 1px solid #5a4a2d;
+            }
+            
+            [data-testid="stWarning"], [data-testid="stWarning"] * {
+                color: #fef3c7 !important;
+            }
+            
+            /* Info box text */
+            [data-testid="stInfo"] {
+                background-color: #1e2d3a;
+                border: 1px solid #2d4a5a;
+            }
+            
+            [data-testid="stInfo"], [data-testid="stInfo"] * {
+                color: #bfdbfe !important;
+            }
+            
+            /* Divider */
+            hr {
+                border-color: #2d3139;
+            }
+            
+            /* Toggle switch */
+            .stCheckbox, .stToggle {
+                color: #f0f2f5 !important;
+            }
+            
+            .stCheckbox label, .stToggle label {
+                color: #f0f2f5 !important;
+            }
+            
+            .stCheckbox span, .stToggle span {
+                color: #f0f2f5 !important;
+            }
+            
+            .stCheckbox p, .stToggle p {
+                color: #f0f2f5 !important;
+            }
+            
+            .stCheckbox div, .stToggle div {
+                color: #f0f2f5 !important;
+            }
+            
+            [data-testid="stCheckbox"] label span {
+                color: #f0f2f5 !important;
+            }
+            
+            label[data-testid="stWidgetLabel"] {
+                color: #f0f2f5 !important;
+            }
+            
+            /* Markdown text */
+            .stMarkdown {
+                color: #e8eaed;
+            }
+            
+            /* Code blocks */
+            code {
+                background-color: #1e2329;
+                color: #60a5fa;
+                padding: 2px 6px;
+                border-radius: 4px;
+            }
+            
+            pre {
+                background-color: #1e2329;
+                border: 1px solid #2d3139;
+            }
+        </style>
+        """, unsafe_allow_html=True)
+    else:
+        st.markdown("""
+        <style>
+            /* Light theme colors - improved */
+            [data-testid="stAppViewContainer"] {
+                background-color: #ffffff;
+            }
+            
+            [data-testid="stHeader"] {
+                background-color: #ffffff;
+            }
+            
+            [data-testid="stSidebar"] {
+                background-color: #f8f9fa;
+            }
+            
+            [data-testid="stSidebarNav"] {
+                background-color: #f8f9fa;
+            }
+            
+            /* Main content background */
+            .main .block-container {
+                background-color: #ffffff;
+            }
+            
+            /* Text colors */
+            .stApp {
+                color: #1f2937;
+            }
+            
+            /* Chat messages */
+            [data-testid="stChatMessage"] {
+                background-color: #f3f4f6 !important;
+                border: 1px solid #e5e7eb;
+            }
+            
+            [data-testid="stChatMessageContent"] {
+                color: #1f2937;
+            }
+            
+            /* Buttons */
+            .stButton>button {
+                background-color: #2563eb;
+                color: white;
+                border-radius: 8px;
+                border: none;
+                transition: all 0.3s;
+            }
+            
+            .stButton>button:hover {
+                background-color: #1d4ed8;
+                box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);
+            }
+            
+            /* Selectbox and inputs */
+            [data-testid="stSelectbox"] > div > div {
+                background-color: #ffffff;
+                color: #1f2937;
+                border: 1px solid #d1d5db;
+            }
+            
+            .stSelectbox label, .stTextInput label {
+                color: #6b7280 !important;
+            }
+            
+            /* File uploader */
+            [data-testid="stFileUploader"] {
+                background-color: #f9fafb;
+                border: 1px solid #e5e7eb;
+                border-radius: 8px;
+            }
+            
+            /* Expander */
+            [data-testid="stExpander"] {
+                background-color: #f9fafb;
+                border: 1px solid #e5e7eb;
+                border-radius: 8px;
+            }
+            
+            .streamlit-expanderHeader {
+                background-color: #f9fafb;
+                color: #1f2937;
+            }
+            
+            /* Info boxes */
+            .stAlert {
+                background-color: #f9fafb;
+                border: 1px solid #e5e7eb;
+                color: #1f2937;
+            }
+            
+            /* Success box */
+            [data-testid="stSuccess"] {
+                background-color: #ecfdf5;
+                border: 1px solid #a7f3d0;
+            }
+            
+            /* Warning box */
+            [data-testid="stWarning"] {
+                background-color: #fffbeb;
+                border: 1px solid #fde68a;
+            }
+            
+            /* Divider */
+            hr {
+                border-color: #e5e7eb;
+            }
+            
+            /* Toggle switch */
+            .stCheckbox, .stToggle {
+                color: #1f2937;
+            }
+            
+            /* Markdown text */
+            .stMarkdown {
+                color: #1f2937;
+            }
+            
+            /* Code blocks */
+            code {
+                background-color: #f3f4f6;
+                color: #2563eb;
+                padding: 2px 6px;
+                border-radius: 4px;
+            }
+            
+            pre {
+                background-color: #f9fafb;
+                border: 1px solid #e5e7eb;
+            }
+        </style>
+        """, unsafe_allow_html=True)
+
+
 def initialize_session_state():
     """
     Initialize Streamlit session state variables.
@@ -61,6 +434,9 @@ def initialize_session_state():
     
     if 'available_models' not in st.session_state:
         st.session_state.available_models = None
+    
+    if 'theme' not in st.session_state:
+        st.session_state.theme = 'dark'
 
 
 def load_components():
@@ -332,8 +708,20 @@ def main():
     """
     initialize_session_state()
     
-    # Header
-    st.title("📚 Academic PDF Chat")
+    # Apply theme CSS first
+    apply_custom_theme(st.session_state.theme)
+    
+    # Header with theme toggle
+    col1, col2 = st.columns([11, 1])
+    with col1:
+        st.title("📚 Academic PDF Chat")
+    with col2:
+        st.markdown("<div style='margin-top: 8px;'></div>", unsafe_allow_html=True)
+        theme_icon = "🌙" if st.session_state.theme == 'dark' else "☀️"
+        if st.button(theme_icon, key="theme_toggle_btn", help="Toggle dark/light mode"):
+            st.session_state.theme = 'light' if st.session_state.theme == 'dark' else 'dark'
+            st.rerun()
+    
     st.markdown("Upload a PDF document and ask questions about its content using AI.")
     
     # Sidebar
