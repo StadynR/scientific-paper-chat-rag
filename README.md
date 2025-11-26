@@ -25,21 +25,9 @@ A Retrieval-Augmented Generation (RAG) application for academic PDF analysis usi
 - Ollama
 - **uv** (recommended for faster dependency management)
 
-## Why uv?
-
-This project supports **[uv](https://github.com/astral-sh/uv)** - a blazingly fast Python package manager written in Rust. Benefits include:
-
-- ⚡ **10-100x faster** package installation than pip
-- 🔒 **Automatic lock file** generation for reproducible builds
-- 🐍 **Automatic Python version management**
-- 🎯 **Zero configuration** - works out of the box
-- 🔄 **Drop-in replacement** for pip/pip-tools/virtualenv
-
-You can still use traditional pip if preferred, but uv provides a significantly better developer experience.
-
 ## Installation
 
-### Option 1: Using uv (Recommended - Fast & Modern)
+### Option 1: Using uv (Recommended)
 
 1. **Install uv** (if not already installed):
 ```bash
