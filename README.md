@@ -23,16 +23,55 @@ A Retrieval-Augmented Generation (RAG) application for academic PDF analysis usi
 
 - Python 3.10+
 - Ollama
+- **uv** (recommended for faster dependency management)
+
+## Why uv?
+
+This project supports **[uv](https://github.com/astral-sh/uv)** - a blazingly fast Python package manager written in Rust. Benefits include:
+
+- ⚡ **10-100x faster** package installation than pip
+- 🔒 **Automatic lock file** generation for reproducible builds
+- 🐍 **Automatic Python version management**
+- 🎯 **Zero configuration** - works out of the box
+- 🔄 **Drop-in replacement** for pip/pip-tools/virtualenv
+
+You can still use traditional pip if preferred, but uv provides a significantly better developer experience.
 
 ## Installation
+
+### Option 1: Using uv (Recommended - Fast & Modern)
+
+1. **Install uv** (if not already installed):
+```bash
+pip install uv
+```
+
+2. **Clone the repository**:
+```bash
+git clone https://github.com/StadynR/scientific-paper-chat-rag
+cd scientific-paper-chat-rag
+```
+
+3. **Install dependencies** (uv handles virtual environment automatically):
+```bash
+uv sync
+```
+
+### Option 2: Traditional pip method
 
 1. Clone the repository:
 ```bash
 git clone https://github.com/StadynR/scientific-paper-chat-rag
+cd scientific-paper-chat-rag
 ```
 
-2. Install dependencies:
+2. Create virtual environment and install dependencies:
 ```bash
+python -m venv .venv
+# Windows:
+.venv\Scripts\activate
+# macOS/Linux:
+source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
@@ -57,6 +96,13 @@ ollama serve
 ```
 
 2. **Run the Streamlit app**:
+
+**With uv:**
+```bash
+uv run streamlit run app.py
+```
+
+**With traditional setup:**
 ```bash
 streamlit run app.py
 ```

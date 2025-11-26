@@ -12,6 +12,11 @@ __pycache__/
 venv/
 env/
 ENV/
+.venv/
+
+# uv
+.uv_cache/
+# uv.lock should be committed for reproducible builds
 
 # Data directories
 data/pdfs/*.pdf
